@@ -5,7 +5,7 @@ class AccountMove(models.Model):
     _inherit = "account.move"
 
     @api.depends(
-        "posted_before", "state", "journal_id", "date", "move_type", "payment_id"
+        "posted_before", "state", "journal_id", "date", "move_type", "origin_payment_id"
     )
     def _compute_name(self):
         self = self.sorted(lambda m: (m.date, m.ref or "", m._origin.id))
