@@ -90,7 +90,7 @@
 
             <!-- only computed when l10n_do ecf invoice -->
             <xpath
-                expr="//page[@id='invoice_tab']/field[@name='invoice_line_ids']/tree/field[@name='tax_ids']"
+                expr="//page[@id='invoice_tab']/field[@name='invoice_line_ids']/list/field[@name='tax_ids']"
                 position="after">
                 <field name="l10n_do_itbis_amount" column_invisible="1" force_save="1" />
             </xpath>
