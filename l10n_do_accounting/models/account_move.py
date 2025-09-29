@@ -161,9 +161,14 @@ class AccountMove(models.Model):
                 create_column(
                     self.env.cr, "account_move", "l10n_do_fiscal_number", "varchar"
                 )
-            if not column_exists(self.env.cr, "account_move", "l10n_latam_manual_document_number"):
+            if not column_exists(
+                self.env.cr, "account_move", "l10n_latam_manual_document_number"
+            ):
                 create_column(
-                    self.env.cr, "account_move", "l10n_latam_manual_document_number", "varchar"
+                    self.env.cr,
+                    "account_move",
+                    "l10n_latam_manual_document_number",
+                    "varchar",
                 )
 
             self.env.cr.execute(
@@ -190,13 +195,18 @@ class AccountMove(models.Model):
         return super()._auto_init()
 
     @api.model
-    def _name_search(self, name, domain=None, operator='ilike', limit=None, order=None):
+    def _name_search(self, name, domain=None, operator="ilike", limit=None, order=None):
         if name:
-            domain = expression.AND([[
-                "|",
-                ("name", operator, name),
-                ("l10n_do_fiscal_number", operator, name),
-            ], domain])
+            domain = expression.AND(
+                [
+                    [
+                        "|",
+                        ("name", operator, name),
+                        ("l10n_do_fiscal_number", operator, name),
+                    ],
+                    domain,
+                ]
+            )
         return super()._name_search(name, domain, operator, limit, order)
 
     def _l10n_do_is_new_expiration_date(self):
@@ -376,9 +386,11 @@ class AccountMove(models.Model):
 
             special_chars = " !#$&'()*+,/:;=?@[]\"-.<>\\^_`"
             security_code = "".join(
-                c.replace(c, "%" + c.encode("utf-8").hex()).upper()
-                if c in special_chars
-                else c
+                (
+                    c.replace(c, "%" + c.encode("utf-8").hex()).upper()
+                    if c in special_chars
+                    else c
+                )
                 for c in invoice.l10n_do_ecf_security_code or ""
             )
             qr_string += "CodigoSeguridad=%s" % security_code
@@ -702,10 +714,7 @@ class AccountMove(models.Model):
         )
 
     def _get_starting_sequence(self):
-        if (
-            self.journal_id.l10n_latam_use_documents
-            and self.country_code == "DO"
-        ):
+        if self.journal_id.l10n_latam_use_documents and self.country_code == "DO":
             return self._l10n_do_get_formatted_sequence()
 
         return super()._get_starting_sequence()
@@ -841,10 +850,10 @@ class AccountMove(models.Model):
             or self.state != "draft"
             and not self[self._l10n_do_sequence_field]
         ):
-            self[
-                self._l10n_do_sequence_field
-            ] = self.l10n_latam_document_type_id._format_document_number(
-                format.format(**format_values)
+            self[self._l10n_do_sequence_field] = (
+                self.l10n_latam_document_type_id._format_document_number(
+                    format.format(**format_values)
+                )
             )
         self._compute_split_sequence()
 
@@ -882,4 +891,5 @@ class AccountMove(models.Model):
         elif self._context.get("is_l10n_do_seq", False):
             return "never"
         else:
-            return super(AccountMove, self)._deduce_sequence_number_reset(name)
+            "never"
+        return super(AccountMove, self)._deduce_sequence_number_reset(name)
