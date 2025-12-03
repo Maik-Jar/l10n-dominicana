@@ -1,0 +1,9 @@
+[[config]]
+name = "17.0"
+odoo_path = "C:/Users/maikr/Projects/Odoo/Community/17.0"
+addons_paths = [
+  "${workspaceFolder}",
+  "$autoDetectAddons"
+]
+refresh_mode = "adaptive"
+file_cache = true
