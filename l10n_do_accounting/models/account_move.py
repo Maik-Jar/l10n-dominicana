@@ -65,7 +65,7 @@ class AccountMove(models.Model):
         selection="_get_l10n_do_income_type",
         string="Income Type",
         copy=False,
-        default=lambda self: self._context.get("l10n_do_income_type", "01"),
+        default=lambda self: self.env.context.get("l10n_do_income_type", "01"),
     )
 
     l10n_do_origin_ncf = fields.Char(
@@ -161,9 +161,14 @@ class AccountMove(models.Model):
                 create_column(
                     self.env.cr, "account_move", "l10n_do_fiscal_number", "varchar"
                 )
-            if not column_exists(self.env.cr, "account_move", "l10n_latam_manual_document_number"):
+            if not column_exists(
+                self.env.cr, "account_move", "l10n_latam_manual_document_number"
+            ):
                 create_column(
-                    self.env.cr, "account_move", "l10n_latam_manual_document_number", "varchar"
+                    self.env.cr,
+                    "account_move",
+                    "l10n_latam_manual_document_number",
+                    "varchar",
                 )
 
             self.env.cr.execute(
@@ -190,13 +195,18 @@ class AccountMove(models.Model):
         return super()._auto_init()
 
     @api.model
-    def _name_search(self, name, domain=None, operator='ilike', limit=None, order=None):
+    def _name_search(self, name, domain=None, operator="ilike", limit=None, order=None):
         if name:
-            domain = expression.AND([[
-                "|",
-                ("name", operator, name),
-                ("l10n_do_fiscal_number", operator, name),
-            ], domain])
+            domain = expression.AND(
+                [
+                    [
+                        "|",
+                        ("name", operator, name),
+                        ("l10n_do_fiscal_number", operator, name),
+                    ],
+                    domain,
+                ]
+            )
         return super()._name_search(name, domain, operator, limit, order)
 
     def _l10n_do_is_new_expiration_date(self):
@@ -376,9 +386,11 @@ class AccountMove(models.Model):
 
             special_chars = " !#$&'()*+,/:;=?@[]\"-.<>\\^_`"
             security_code = "".join(
-                c.replace(c, "%" + c.encode("utf-8").hex()).upper()
-                if c in special_chars
-                else c
+                (
+                    c.replace(c, "%" + c.encode("utf-8").hex()).upper()
+                    if c in special_chars
+                    else c
+                )
                 for c in invoice.l10n_do_ecf_security_code or ""
             )
             qr_string += "CodigoSeguridad=%s" % security_code
@@ -681,7 +693,7 @@ class AccountMove(models.Model):
 
     def _l10n_do_get_formatted_sequence(self):
         self.ensure_one()
-        if not self._context.get("is_l10n_do_seq", False):
+        if not self.env.context.get("is_l10n_do_seq", False):
             starting_sequence = "%s/%04d/0000" % (
                 self.journal_id.code,
                 self.date.year,
@@ -702,10 +714,7 @@ class AccountMove(models.Model):
         )
 
     def _get_starting_sequence(self):
-        if (
-            self.journal_id.l10n_latam_use_documents
-            and self.country_code == "DO"
-        ):
+        if self.journal_id.l10n_latam_use_documents and self.country_code == "DO":
             return self._l10n_do_get_formatted_sequence()
 
         return super()._get_starting_sequence()
@@ -719,7 +728,7 @@ class AccountMove(models.Model):
             where_string = where_string.replace(
                 "AND sequence_prefix !~ %(anti_regex)s ", ""
             )
-        if self._context.get("is_l10n_do_seq", False):
+        if self.env.context.get("is_l10n_do_seq", False):
             where_string = where_string.replace("journal_id = %(journal_id)s AND", "")
             where_string += (
                 " AND l10n_latam_document_type_id = %(l10n_latam_document_type_id)s AND"
@@ -756,7 +765,7 @@ class AccountMove(models.Model):
             record.l10n_do_sequence_number = int(matching.group(1) or 0)
 
     def _get_last_sequence(self, relaxed=False, with_prefix=None):
-        if not self._context.get("is_l10n_do_seq", False):
+        if not self.env.context.get("is_l10n_do_seq", False):
             return super(AccountMove, self)._get_last_sequence(
                 relaxed=relaxed, with_prefix=with_prefix
             )
@@ -803,7 +812,7 @@ class AccountMove(models.Model):
         return (self.env.cr.fetchone() or [None])[0]
 
     def _get_sequence_format_param(self, previous):
-        if not self._context.get("is_l10n_do_seq", False):
+        if not self.env.context.get("is_l10n_do_seq", False):
             return super(AccountMove, self)._get_sequence_format_param(previous)
 
         regex = self._l10n_do_sequence_fixed_regex
@@ -821,7 +830,7 @@ class AccountMove(models.Model):
     def _set_next_sequence(self):
         self.ensure_one()
 
-        if not self._context.get("is_l10n_do_seq", False):
+        if not self.env.context.get("is_l10n_do_seq", False):
             return super(AccountMove, self)._set_next_sequence()
 
         last_sequence = self._get_last_sequence()
@@ -841,10 +850,10 @@ class AccountMove(models.Model):
             or self.state != "draft"
             and not self[self._l10n_do_sequence_field]
         ):
-            self[
-                self._l10n_do_sequence_field
-            ] = self.l10n_latam_document_type_id._format_document_number(
-                format.format(**format_values)
+            self[self._l10n_do_sequence_field] = (
+                self.l10n_latam_document_type_id._format_document_number(
+                    format.format(**format_values)
+                )
             )
         self._compute_split_sequence()
 
@@ -876,10 +885,10 @@ class AccountMove(models.Model):
             self.l10n_latam_use_documents
             and self.company_id.country_id.code == "DO"
             and self.posted_before
-            and not self._context.get("is_l10n_do_seq", False)
+            and not self.env.context.get("is_l10n_do_seq", False)
         ):
             return "year"
-        elif self._context.get("is_l10n_do_seq", False):
+        elif self.env.context.get("is_l10n_do_seq", False):
             return "never"
         else:
             return super(AccountMove, self)._deduce_sequence_number_reset(name)
