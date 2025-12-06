@@ -4,9 +4,7 @@ from odoo import models, api
 class AccountMove(models.Model):
     _inherit = "account.move"
 
-    @api.depends(
-        "posted_before", "state", "journal_id", "date", "move_type", "payment_id"
-    )
+    @api.depends("posted_before", "state", "journal_id", "date", "move_type")
     def _compute_name(self):
         self = self.sorted(lambda m: (m.date, m.ref or "", m._origin.id))
 
@@ -31,7 +29,7 @@ class AccountMove(models.Model):
             if move.date and (not move_has_name or not move._sequence_matches_date()):
                 move._set_next_sequence()
 
-        self.filtered(lambda m: not m.name and not move.quick_edit_mode).name = "/"
+        self.filtered(lambda m: not m.name).name = "/"
         self._inverse_name()
 
         for move in self.filtered(
