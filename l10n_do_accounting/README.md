@@ -3,6 +3,11 @@
 
 Este módulo implementa la gestión y emisión de comprobantes fiscales para el cumplimento de la norma 06-18 de la Dirección de Impuestos Internos de la República Dominicana.
 
+## Compatibilidad
+
+- **Odoo 19.0+**
+- Python 3.11+
+- PostgreSQL 12+
 
 ## Funcionalidades principales
 
