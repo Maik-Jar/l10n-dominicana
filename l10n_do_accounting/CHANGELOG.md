@@ -12,9 +12,13 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 - Verificación de compatibilidad de funciones SQL (`odoo.tools.sql`)
 - Verificación de compatibilidad del método `_get_rates()` para conversión de moneda
 - Verificación de vistas XML con atributos `invisible` y `column_invisible`
-- **BREAKING:** Removido campo `users` de grupos de seguridad (incompatible con Odoo 19.0)
-  - Los usuarios ahora deben asignarse a grupos manualmente desde la interfaz de usuario
+
+### Fixed
+- **Actualizado campo `users` → `user_ids` en grupos de seguridad (Odoo 19.0)**
+  - El campo para asignar usuarios a grupos cambió de nombre en Odoo 19.0
+  - Mantiene la funcionalidad de asignación automática de usuarios a grupos
   - Afecta grupos: `group_l10n_do_fiscal_credit_note`, `group_l10n_do_fiscal_invoice_cancel`, `group_l10n_do_edit_fiscal_partner`, `group_l10n_do_debit_note`
+  - Referencias: `odoo/addons/base/models/res_groups.py:17` (código fuente Odoo 19.0)
 
 ### Verified
 - Funciones SQL compatibles: `index_exists()`, `drop_index()`, `column_exists()`, `create_column()`
