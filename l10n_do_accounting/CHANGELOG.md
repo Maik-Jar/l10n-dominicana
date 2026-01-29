@@ -25,6 +25,12 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   - Mantiene funcionalidad de mensajes de advertencia para contingencia e-CF y expiración de NCF
   - Referencias: `odoo/addons/account/views/account_move_views.xml:797-799`
 
+- **Actualizado XPath en plantillas de reportes para compatibilidad con Odoo 19.0**
+  - Cambiado `hasclass('company_address')` a `[@name='company_address']` en `external_layout_striped`
+  - El elemento ya no usa clase CSS sino atributo `name` en Odoo 19.0
+  - Mantiene funcionalidad de ocultar dirección de compañía en facturas dominicanas
+  - Referencias: `odoo/addons/web/views/report_templates.xml:312`
+
 ### Verified
 - Funciones SQL compatibles: `index_exists()`, `drop_index()`, `column_exists()`, `create_column()`
 - No se encontraron patrones deprecados del ORM (`self._uid`, `self._cr`, `self._context`)
