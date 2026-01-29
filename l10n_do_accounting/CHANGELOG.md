@@ -20,6 +20,11 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   - Afecta grupos: `group_l10n_do_fiscal_credit_note`, `group_l10n_do_fiscal_invoice_cancel`, `group_l10n_do_edit_fiscal_partner`, `group_l10n_do_debit_note`
   - Referencias: `odoo/addons/base/models/res_groups.py:17` (código fuente Odoo 19.0)
 
+- **Actualizado XPath en vista de facturas para compatibilidad con Odoo 19.0**
+  - Cambiado referencia de `tax_lock_date_message` (removido en 19.0) a `alerts` div
+  - Mantiene funcionalidad de mensajes de advertencia para contingencia e-CF y expiración de NCF
+  - Referencias: `odoo/addons/account/views/account_move_views.xml:797-799`
+
 ### Verified
 - Funciones SQL compatibles: `index_exists()`, `drop_index()`, `column_exists()`, `create_column()`
 - No se encontraron patrones deprecados del ORM (`self._uid`, `self._cr`, `self._context`)
