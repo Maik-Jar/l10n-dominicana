@@ -249,7 +249,6 @@
         </t>
 
         <t t-set="address" position="replace"/>
-        <xpath expr="//h2" position="replace"/>
 
         <!-- replace information section and use dominican style -->
         <div id="informations" position="replace">

@@ -31,6 +31,11 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   - Mantiene funcionalidad de ocultar dirección de compañía en facturas dominicanas
   - Referencias: `odoo/addons/web/views/report_templates.xml:312`
 
+- **Removido XPath obsoleto de elemento h2 en reporte de factura (Odoo 19.0)**
+  - El elemento `<h2>` fue removido del template base `report_invoice_document`
+  - Odoo 19.0 ahora usa `layout_document_title` en lugar de h2 para títulos
+  - Referencias: `odoo/addons/account/views/report_invoice.xml` (Odoo 19.0)
+
 ### Verified
 - Funciones SQL compatibles: `index_exists()`, `drop_index()`, `column_exists()`, `create_column()`
 - No se encontraron patrones deprecados del ORM (`self._uid`, `self._cr`, `self._context`)
