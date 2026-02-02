@@ -37,10 +37,11 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   - Referencias: `odoo/addons/account/views/report_invoice.xml` (Odoo 19.0)
 
 - **Corregido error "can't adapt type 'NewId'" en _compute_name (Odoo 19.0)**
-  - Agregada verificación para evitar llamar `_set_next_sequence()` en registros no guardados
-  - El método `_locked_increment` ejecuta SQL que requiere IDs reales, no NewIds
-  - Previene `psycopg2.ProgrammingError` al crear facturas desde la UI
-  - Referencias: `odoo/addons/account/models/sequence_mixin.py:411-417` (Odoo 19.0)
+  - **Corrección final:** Excluidas facturas dominicanas del flujo estándar de secuencias
+  - Las facturas DO usan lógica especializada que se ejecuta al confirmar (state='posted')
+  - El flujo estándar intentaba establecer secuencias en borradores sin verificar estado
+  - Previene `psycopg2.ProgrammingError` al cambiar diario en borradores
+  - Referencias: `odoo/addons/account/models/account_move.py:943` (Odoo 19.0)
 
 ### Verified
 - Funciones SQL compatibles: `index_exists()`, `drop_index()`, `column_exists()`, `create_column()`
