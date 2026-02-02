@@ -56,6 +56,13 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   - Los campos se inicializan a 0 si no están presentes en el patrón de secuencia
   - Referencias: `odoo/addons/account/models/sequence_mixin.py:148,333-340` (Odoo 19.0)
 
+- **Removidas referencias al campo `mobile` en templates de reporte (Odoo 19.0)**
+  - El campo `mobile` fue eliminado del modelo `res.partner` en Odoo 19.0
+  - Los valores existentes se preservan en el chatter (historial de comunicación)
+  - Templates de factura ahora solo muestran el campo `phone` para teléfonos de contacto
+  - Previene `AttributeError: 'res.partner' object has no attribute 'mobile'`
+  - Afecta template `l10n_do_accounting.informations` en reporte de factura
+
 ### Verified
 - Funciones SQL compatibles: `index_exists()`, `drop_index()`, `column_exists()`, `create_column()`
 - No se encontraron patrones deprecados del ORM (`self._uid`, `self._cr`, `self._context`)
