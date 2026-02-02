@@ -43,6 +43,12 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   - Previene `psycopg2.ProgrammingError` al cambiar diario en borradores
   - Referencias: `odoo/addons/account/models/account_move.py:943` (Odoo 19.0)
 
+- **Corregido detección de facturas dominicanas en métodos de secuencia (Odoo 19.0)**
+  - Cambiada detección basada en contexto a detección basada en campos del registro
+  - Los métodos `_get_sequence_format_param` y `_set_next_sequence` ahora verifican `country_code` y `l10n_latam_use_documents`
+  - Previene `AttributeError: 'NoneType' object has no attribute 'groupdict'` al confirmar facturas
+  - El contexto `is_l10n_do_seq` se puede perder durante recomputes, causando errores
+
 ### Verified
 - Funciones SQL compatibles: `index_exists()`, `drop_index()`, `column_exists()`, `create_column()`
 - No se encontraron patrones deprecados del ORM (`self._uid`, `self._cr`, `self._context`)

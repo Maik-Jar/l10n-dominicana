@@ -812,7 +812,14 @@ class AccountMove(models.Model):
         return (self.env.cr.fetchone() or [None])[0]
 
     def _get_sequence_format_param(self, previous):
-        if not self.env.context.get("is_l10n_do_seq", False):
+        # Check if this is a Dominican invoice with fiscal number
+        is_do_invoice = (
+            self.country_code == "DO"
+            and self.l10n_latam_use_documents
+            and previous
+        )
+
+        if not is_do_invoice:
             return super(AccountMove, self)._get_sequence_format_param(previous)
 
         regex = self._l10n_do_sequence_fixed_regex
@@ -830,7 +837,14 @@ class AccountMove(models.Model):
     def _set_next_sequence(self):
         self.ensure_one()
 
-        if not self.env.context.get("is_l10n_do_seq", False):
+        # Check if this is a Dominican invoice that should use fiscal sequence
+        is_do_invoice = (
+            self.country_code == "DO"
+            and self.l10n_latam_use_documents
+            and self.l10n_latam_document_type_id
+        )
+
+        if not is_do_invoice:
             return super(AccountMove, self)._set_next_sequence()
 
         last_sequence = self._get_last_sequence()
