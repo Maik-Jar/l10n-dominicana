@@ -26,10 +26,9 @@ class AccountMove(models.Model):
                         and move._get_last_sequence()
                     ):
                         continue
-            if move.date and (not move_has_name or not move._sequence_matches_date()):
-                # Only set sequence if record has been saved (has real ID, not NewId)
-                if move._origin:
-                    move._set_next_sequence()
+            # Skip Dominican invoices - they have special logic below (lines 37-46)
+            if move.date and (not move_has_name or not move._sequence_matches_date()) and move.country_code != 'DO':
+                move._set_next_sequence()
 
         self.filtered(lambda m: not m.name).name = "/"
         self._inverse_name()
