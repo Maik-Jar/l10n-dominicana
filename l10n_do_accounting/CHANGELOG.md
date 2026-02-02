@@ -49,6 +49,13 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   - Previene `AttributeError: 'NoneType' object has no attribute 'groupdict'` al confirmar facturas
   - El contexto `is_l10n_do_seq` se puede perder durante recomputes, causando errores
 
+- **Corregido formato de valores de secuencia para compatibilidad con Odoo 19.0**
+  - Añadidos campos requeridos en `format_values`: `year`, `month`, `year_end`, `year_length`, `year_end_length`
+  - Odoo 19.0 espera estos campos en `_sequence_matches_date()` para validar secuencias
+  - Previene `KeyError: 'year'` al confirmar facturas dominicanas
+  - Los campos se inicializan a 0 si no están presentes en el patrón de secuencia
+  - Referencias: `odoo/addons/account/models/sequence_mixin.py:148,333-340` (Odoo 19.0)
+
 ### Verified
 - Funciones SQL compatibles: `index_exists()`, `drop_index()`, `column_exists()`, `create_column()`
 - No se encontraron patrones deprecados del ORM (`self._uid`, `self._cr`, `self._context`)

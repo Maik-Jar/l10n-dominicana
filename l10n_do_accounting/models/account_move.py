@@ -828,6 +828,13 @@ class AccountMove(models.Model):
         format_values["seq_length"] = len(format_values["seq"])
         format_values["seq"] = int(format_values.get("seq") or 0)
 
+        # Ensure all required keys exist for Odoo 19.0 compatibility
+        # The _sequence_matches_date method expects these fields
+        format_values["year_length"] = len(format_values.get("year") or "")
+        format_values["year_end_length"] = len(format_values.get("year_end") or "")
+        for field in ("year", "month", "year_end"):
+            format_values[field] = int(format_values.get(field) or 0)
+
         placeholders = re.findall(r"(prefix\d|seq\d?)", regex)
         format = "".join(
             "{seq:0{seq_length}d}" if s == "seq" else "{%s}" % s for s in placeholders
