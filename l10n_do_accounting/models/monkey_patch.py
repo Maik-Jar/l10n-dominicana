@@ -27,7 +27,9 @@ class AccountMove(models.Model):
                     ):
                         continue
             if move.date and (not move_has_name or not move._sequence_matches_date()):
-                move._set_next_sequence()
+                # Only set sequence if record has been saved (has real ID, not NewId)
+                if move._origin:
+                    move._set_next_sequence()
 
         self.filtered(lambda m: not m.name).name = "/"
         self._inverse_name()
@@ -39,5 +41,6 @@ class AccountMove(models.Model):
             and not x.l10n_do_enable_first_sequence
             and x.state == "posted"
             and not x.l10n_do_fiscal_number
+            and x._origin  # Only if record has been saved
         ):
             move.with_context(is_l10n_do_seq=True)._set_next_sequence()

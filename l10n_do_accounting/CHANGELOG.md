@@ -36,6 +36,12 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   - Odoo 19.0 ahora usa `layout_document_title` en lugar de h2 para títulos
   - Referencias: `odoo/addons/account/views/report_invoice.xml` (Odoo 19.0)
 
+- **Corregido error "can't adapt type 'NewId'" en _compute_name (Odoo 19.0)**
+  - Agregada verificación para evitar llamar `_set_next_sequence()` en registros no guardados
+  - El método `_locked_increment` ejecuta SQL que requiere IDs reales, no NewIds
+  - Previene `psycopg2.ProgrammingError` al crear facturas desde la UI
+  - Referencias: `odoo/addons/account/models/sequence_mixin.py:411-417` (Odoo 19.0)
+
 ### Verified
 - Funciones SQL compatibles: `index_exists()`, `drop_index()`, `column_exists()`, `create_column()`
 - No se encontraron patrones deprecados del ORM (`self._uid`, `self._cr`, `self._context`)
