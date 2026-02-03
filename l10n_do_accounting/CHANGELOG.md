@@ -71,6 +71,20 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   - Sigue el patrón estándar de Odoo 19.0 para reportes de impuestos
   - Referencias: `odoo/addons/account/views/report_invoice.xml:360-363` (Odoo 19.0)
 
+- **Corregido asignación de NCF al confirmar facturas fiscales (Odoo 19.0)**
+  - Removida condición `x._origin` que bloqueaba la asignación de NCF
+  - En Odoo 19.0, `_origin` puede no estar sincronizado durante `_compute_name()`
+  - Las otras condiciones del filtro son suficientes (state='posted', country_code='DO', etc.)
+  - Ahora el NCF se asigna correctamente al confirmar facturas con diario fiscal
+  - Previene que el campo `name` se quede en "/" después de confirmar
+
+- **Corregido estructura de tax_totals en reporte de factura (Odoo 19.0)**
+  - El campo `formatted_amount` no existe en `tax_totals['subtotals']` de Odoo 19.0
+  - Cambiado a usar `base_amount_currency` con widget monetary
+  - Sigue el patrón estándar del template `account.document_tax_totals_template`
+  - Previene `KeyError: 'formatted_amount'` al generar PDF de facturas
+  - Referencias: `odoo/addons/account/views/report_invoice.xml:505-579` (Odoo 19.0)
+
 ### Verified
 - Funciones SQL compatibles: `index_exists()`, `drop_index()`, `column_exists()`, `create_column()`
 - No se encontraron patrones deprecados del ORM (`self._uid`, `self._cr`, `self._context`)
