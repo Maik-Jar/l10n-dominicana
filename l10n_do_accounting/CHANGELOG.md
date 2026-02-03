@@ -63,6 +63,14 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   - Previene `AttributeError: 'res.partner' object has no attribute 'mobile'`
   - Afecta template `l10n_do_accounting.informations` en reporte de factura
 
+- **Corregido paso de variables al template document_tax_totals (Odoo 19.0)**
+  - En Odoo 19.0, las variables deben pasarse explícitamente a los templates llamados
+  - Agregada condición `t-if="o.tax_totals"` para verificar que existe
+  - Agregado `t-set="tax_totals"` y `t-set="currency"` en la llamada del template
+  - Previene `KeyError: 'tax_totals'` al generar PDF de facturas
+  - Sigue el patrón estándar de Odoo 19.0 para reportes de impuestos
+  - Referencias: `odoo/addons/account/views/report_invoice.xml:360-363` (Odoo 19.0)
+
 ### Verified
 - Funciones SQL compatibles: `index_exists()`, `drop_index()`, `column_exists()`, `create_column()`
 - No se encontraron patrones deprecados del ORM (`self._uid`, `self._cr`, `self._context`)
