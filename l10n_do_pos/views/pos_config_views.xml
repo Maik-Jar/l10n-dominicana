@@ -7,7 +7,7 @@
         <field name="inherit_id" ref="point_of_sale.pos_config_view_form"/>
         <field name="arch" type="xml">
             <xpath expr="//sheet/div[hasclass('row','mt16','o_settings_container')][last()]" position="after">
-                <div class="row mt16 o_settings_container" invisible="company_country_code != 'DO'">
+                <div class="row mt16 o_settings_container">
                     <div class="col-md-12">
                         <h2>Configuración Fiscal Dominicana</h2>
                         <setting>
