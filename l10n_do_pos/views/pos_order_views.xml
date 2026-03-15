@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="pos_order_view_list_inherit_l10n_do" model="ir.ui.view">
+        <field name="name">pos.order.tree.inherit.l10n_do</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_order_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='pos_reference']" position="after">
+                <field name="l10n_do_ncf" optional="show" width="100px"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
