@@ -75,7 +75,18 @@ class PosOrder(models.Model):
 
         return invoice
 
-    @api.model
-    def _load_pos_data_fields(self, config):
-        fields = super()._load_pos_data_fields(config)
-        return fields + ['l10n_do_ncf', 'l10n_do_ncf_type']
+    def read_pos_data(self, data, config):
+        result = super().read_pos_data(data, config)
+        if result.get('pos.order') and self:
+            ncf_vals = {
+                r['id']: r
+                for r in self.read(['l10n_do_ncf', 'l10n_do_ncf_type'], load=False)
+            }
+            for order_data in result['pos.order']:
+                oid = order_data.get('id')
+                if oid in ncf_vals:
+                    order_data.update({
+                        'l10n_do_ncf': ncf_vals[oid].get('l10n_do_ncf', False),
+                        'l10n_do_ncf_type': ncf_vals[oid].get('l10n_do_ncf_type', False),
+                    })
+        return result
