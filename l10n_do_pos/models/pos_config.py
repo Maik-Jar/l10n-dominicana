@@ -34,4 +34,4 @@ class PosConfig(models.Model):
     def _get_journal_ncf_types(self):
         if self.l10n_do_fiscal_journal_id:
             return self.l10n_do_fiscal_journal_id._get_journal_ncf_types()
-        return {}
+        return []

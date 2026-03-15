@@ -27,25 +27,59 @@ class PosOrder(models.Model):
         return self.config_id.l10n_do_fiscal_journal_id
 
     def _get_l10n_do_document_type(self, partner=None):
+        """Obtiene el l10n_latam.document.type correspondiente para una orden POS.
+
+        Determina el tipo de comprobante fiscal (NCF) basándose en el tipo
+        de contribuyente del cliente. Los contribuyentes (taxpayer) reciben
+        Crédito Fiscal (B01/E31), los demás reciben Consumo (B02/E32).
+
+        :param partner: res.partner opcional. Si no se proporciona, usa el
+            partner de la orden o el cliente por defecto de la configuración.
+        :return: recordset l10n_latam.document.type o None
+        """
         if not self._is_l10n_do_fiscal_pos():
             return None
 
         config = self.config_id
         journal = config.l10n_do_fiscal_journal_id
-        ncf_types = journal._get_journal_ncf_types()
 
         if not partner:
             partner = self.partner_id or config.l10n_do_default_partner_id
 
-        if not partner:
-            return ncf_types.get("consumption", {}).get("doc_type_id")
-
-        tax_payer_type = partner.l10n_do_dgii_tax_payer_type or "non_payer"
-
-        if tax_payer_type == "tax_payer":
-            return ncf_types.get("credit", {}).get("doc_type_id")
+        # Determinar el ncf_type según el tipo de contribuyente del partner
+        if partner and partner.l10n_do_dgii_tax_payer_type == "taxpayer":
+            target_ncf_type = "fiscal"
         else:
-            return ncf_types.get("consumption", {}).get("doc_type_id")
+            target_ncf_type = "consumer"
+
+        # Obtener los tipos NCF permitidos para este diario/partner
+        if partner and partner.l10n_do_dgii_tax_payer_type:
+            ncf_types = journal._get_journal_ncf_types(
+                counterpart_partner=partner.commercial_partner_id,
+            )
+        else:
+            ncf_types = journal._get_journal_ncf_types()
+
+        # Filtrar para incluir solo el tipo objetivo (y su versión e-CF)
+        allowed_ncf_types = [
+            t for t in ncf_types
+            if t in (target_ncf_type, "e-%s" % target_ncf_type)
+        ]
+
+        if not allowed_ncf_types:
+            return None
+
+        # Buscar el document type correspondiente usando los prefijos del diario
+        codes = journal._get_journal_codes()
+        domain = [
+            ("country_id.code", "=", "DO"),
+            ("l10n_do_ncf_type", "in", allowed_ncf_types),
+            ("internal_type", "=", "invoice"),
+        ]
+        if codes:
+            domain.append(("code", "in", codes))
+
+        return self.env["l10n_latam.document.type"].search(domain, limit=1)
 
     def _generate_l10n_do_ncf(self):
         """Genera NCF para órdenes POS sin factura."""
@@ -64,7 +98,7 @@ class PosOrder(models.Model):
             ncf = sequence.next_by_id()
             self.write({
                 'l10n_do_ncf': ncf,
-                'l10n_do_ncf_type': doc_type.code,
+                'l10n_do_ncf_type': doc_type.doc_code_prefix,
             })
 
     def action_pos_order_paid(self):
@@ -81,11 +115,10 @@ class PosOrder(models.Model):
             config = self.config_id
             journal = config.l10n_do_fiscal_journal_id
 
+            doc_type = self._get_l10n_do_document_type(self.partner_id)
             vals.update({
                 "journal_id": journal.id,
-                "l10n_latam_document_type_id": self._get_l10n_do_document_type(
-                    self.partner_id
-                ),
+                "l10n_latam_document_type_id": doc_type.id if doc_type else False,
             })
 
         return vals
@@ -98,6 +131,6 @@ class PosOrder(models.Model):
             invoice_with_context._set_next_sequence()
 
             self.l10n_do_ncf = invoice.l10n_do_fiscal_number
-            self.l10n_do_ncf_type = invoice.l10n_latam_document_type_id.code
+            self.l10n_do_ncf_type = invoice.l10n_latam_document_type_id.doc_code_prefix
 
         return invoice
