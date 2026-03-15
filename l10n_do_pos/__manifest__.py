@@ -19,7 +19,6 @@
     ],
     "assets": {
         "point_of_sale._assets_pos": [
-            "l10n_do_pos/static/src/js/pos_order_patch.js",
             "l10n_do_pos/static/src/xml/receipt_ncf.xml",
         ],
     },
