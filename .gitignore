@@ -106,3 +106,4 @@ ENV/
 .claude
 .requirements
 .agents
+.analysis
