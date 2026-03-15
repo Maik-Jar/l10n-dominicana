@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <t t-name="l10n_do_pos.OrderReceiptNCF" owl="1">
+        <div class="receipt-ncf-section" t-if="data.ncf">
+            <div class="receipt-section-divider"/>
+
+            <div class="receipt-fiscal-info">
+                <div class="receipt-line">
+                    <span class="receipt-label">COMPROBANTE FISCAL (NCF):</span>
+                    <span class="receipt-value" t-text="data.ncf"/>
+                </div>
+                <div class="receipt-line">
+                    <span class="receipt-label">Tipo:</span>
+                    <span class="receipt-value" t-text="data.ncf_type"/>
+                </div>
+            </div>
+
+            <div class="receipt-client-info" t-if="data.client_rnc">
+                <div class="receipt-line">
+                    <span class="receipt-label">RNC Cliente:</span>
+                    <span class="receipt-value" t-text="data.client_rnc"/>
+                </div>
+            </div>
+
+            <div class="receipt-section-divider"/>
+        </div>
+    </t>
+
+    <t t-name="l10n_do_pos.OrderReceiptTaxBreakdown" owl="1">
+        <div class="receipt-tax-breakdown" t-if="data.tax_details">
+            <div class="receipt-line">
+                <span class="receipt-label">Subtotal</span>
+                <span class="receipt-value" t-text="formatCurrency(data.subtotal)"/>
+            </div>
+            <div class="receipt-line" t-foreach="data.tax_details" t-as="tax">
+                <span class="receipt-label" t-text="tax.name"/>
+                <span class="receipt-value" t-text="formatCurrency(tax.amount)"/>
+            </div>
+        </div>
+    </t>
+
+</templates>
