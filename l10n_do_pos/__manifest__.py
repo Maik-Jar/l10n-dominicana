@@ -18,14 +18,8 @@
         "views/pos_order_views.xml",
     ],
     "assets": {
-        "point_of_sale.assets_backend": [
-            "l10n_do_pos/static/src/js/pos_store_patch.js",
-            "l10n_do_pos/static/src/js/order_management_patch.js",
-            "l10n_do_pos/static/src/js/payment_screen_patch.js",
-            "l10n_do_pos/static/src/js/receipt_screen_patch.js",
-        ],
-        "point_of_sale.assets_qweb": [
-            "l10n_do_pos/static/src/xml/pos_ncf_selector.xml",
+        "point_of_sale._assets_pos": [
+            "l10n_do_pos/static/src/js/pos_order_patch.js",
             "l10n_do_pos/static/src/xml/receipt_ncf.xml",
         ],
     },

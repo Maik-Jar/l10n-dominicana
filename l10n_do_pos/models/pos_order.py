@@ -75,7 +75,7 @@ class PosOrder(models.Model):
 
         return invoice
 
-    def _pos_ui_models_to_save(self):
-        result = super()._pos_ui_models_to_save()
-        result.extend(["l10n_do_ncf", "l10n_do_ncf_type"])
-        return result
+    @api.model
+    def _load_pos_data_fields(self, config):
+        fields = super()._load_pos_data_fields(config)
+        return fields + ['l10n_do_ncf', 'l10n_do_ncf_type']
