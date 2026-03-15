@@ -47,6 +47,33 @@ class PosOrder(models.Model):
         else:
             return ncf_types.get("consumption", {}).get("doc_type_id")
 
+    def _generate_l10n_do_ncf(self):
+        """Genera NCF para órdenes POS sin factura."""
+        self.ensure_one()
+        if not self._is_l10n_do_fiscal_pos():
+            return
+
+        journal = self.config_id.l10n_do_fiscal_journal_id
+        doc_type = self._get_l10n_do_document_type()
+        if not doc_type:
+            return
+
+        # Obtener secuencia del diario fiscal
+        sequence = journal._get_l10n_do_sequence(doc_type)
+        if sequence:
+            ncf = sequence.next_by_id()
+            self.write({
+                'l10n_do_ncf': ncf,
+                'l10n_do_ncf_type': doc_type.code,
+            })
+
+    def action_pos_order_paid(self):
+        res = super().action_pos_order_paid()
+        # Generar NCF para órdenes sin factura
+        if self._is_l10n_do_fiscal_pos() and not self.to_invoice:
+            self._generate_l10n_do_ncf()
+        return res
+
     def _prepare_invoice_vals(self):
         vals = super()._prepare_invoice_vals()
 
@@ -63,8 +90,8 @@ class PosOrder(models.Model):
 
         return vals
 
-    def _create_invoice(self):
-        invoice = super()._create_invoice()
+    def _create_invoice(self, move_vals):
+        invoice = super()._create_invoice(move_vals)
 
         if invoice and self._is_l10n_do_fiscal_pos():
             invoice_with_context = invoice.with_context(is_l10n_do_seq=True)
@@ -74,19 +101,3 @@ class PosOrder(models.Model):
             self.l10n_do_ncf_type = invoice.l10n_latam_document_type_id.code
 
         return invoice
-
-    def read_pos_data(self, data, config):
-        result = super().read_pos_data(data, config)
-        if result.get('pos.order') and self:
-            ncf_vals = {
-                r['id']: r
-                for r in self.read(['l10n_do_ncf', 'l10n_do_ncf_type'], load=False)
-            }
-            for order_data in result['pos.order']:
-                oid = order_data.get('id')
-                if oid in ncf_vals:
-                    order_data.update({
-                        'l10n_do_ncf': ncf_vals[oid].get('l10n_do_ncf', False),
-                        'l10n_do_ncf_type': ncf_vals[oid].get('l10n_do_ncf_type', False),
-                    })
-        return result
