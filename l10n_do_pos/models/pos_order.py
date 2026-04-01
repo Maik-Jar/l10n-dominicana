@@ -82,24 +82,37 @@ class PosOrder(models.Model):
         return self.env["l10n_latam.document.type"].search(domain, limit=1)
 
     def _generate_l10n_do_ncf(self):
-        """Genera NCF para órdenes POS sin factura."""
+        """Genera NCF para órdenes POS sin factura.
+
+        Crea una factura temporal en borrador para generar el número fiscal,
+        extrae el NCF, y descarta la factura.
+        """
         self.ensure_one()
         if not self._is_l10n_do_fiscal_pos():
             return
 
-        journal = self.config_id.l10n_do_fiscal_journal_id
         doc_type = self._get_l10n_do_document_type()
         if not doc_type:
             return
 
-        # Obtener secuencia del diario fiscal
-        sequence = journal._get_l10n_do_sequence(doc_type)
-        if sequence:
-            ncf = sequence.next_by_id()
-            self.write({
-                'l10n_do_ncf': ncf,
-                'l10n_do_ncf_type': doc_type.doc_code_prefix,
-            })
+        # Crear factura temporal para generar el NCF
+        invoice_vals = self._prepare_invoice_vals()
+        invoice = self.env['account.move'].create(invoice_vals)
+
+        try:
+            # Generar el número fiscal (NCF)
+            invoice_with_context = invoice.with_context(is_l10n_do_seq=True)
+            invoice_with_context._set_next_sequence()
+
+            # Guardar el NCF en la orden POS
+            if invoice.l10n_do_fiscal_number:
+                self.write({
+                    'l10n_do_ncf': invoice.l10n_do_fiscal_number,
+                    'l10n_do_ncf_type': doc_type.doc_code_prefix,
+                })
+        finally:
+            # Descartar la factura temporal
+            invoice.unlink()
 
     def action_pos_order_paid(self):
         res = super().action_pos_order_paid()
