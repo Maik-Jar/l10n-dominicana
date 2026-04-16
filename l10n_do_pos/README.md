@@ -124,11 +124,14 @@ RNC Cliente: 12345678901
 
 **Ruta de datos:**
 
-1. Usuario completa orden en POS
-2. Al facturar, `pos.order._create_invoice()` genera `account.move`
-3. Se llama `account.move._set_next_sequence()` con contexto `is_l10n_do_seq=True`
-4. Se asigna `l10n_do_fiscal_number` del account.move a `pos.order.l10n_do_ncf`
-5. Recibo OWL renderiza `order.l10n_do_ncf` y `order.l10n_do_ncf_type`
+1. Usuario completa orden en POS marcada ``to_invoice``
+2. Al cerrar la sesión, ``pos.order._generate_pos_order_invoice()`` crea
+   ``account.move`` en borrador con ``l10n_latam_document_type_id``
+3. El core del POS invoca ``invoice._post()``, que dispara el
+   ``sequence_mixin`` y asigna el NCF en ``name`` (``"B02 00000001"``)
+4. El override lee ``invoice.l10n_do_fiscal_number`` (``"B0200000001"``) y lo
+   guarda en ``pos.order.l10n_do_ncf``
+5. Recibo OWL renderiza ``order.l10n_do_ncf`` y ``order.l10n_do_ncf_type``
 
 ## Fase 2 (Futuro)
 

@@ -1,4 +1,4 @@
-from odoo import api, fields, models
+from odoo import fields, models
 
 
 class PosOrder(models.Model):
@@ -32,10 +32,6 @@ class PosOrder(models.Model):
         Determina el tipo de comprobante fiscal (NCF) basándose en el tipo
         de contribuyente del cliente. Los contribuyentes (taxpayer) reciben
         Crédito Fiscal (B01/E31), los demás reciben Consumo (B02/E32).
-
-        :param partner: res.partner opcional. Si no se proporciona, usa el
-            partner de la orden o el cliente por defecto de la configuración.
-        :return: recordset l10n_latam.document.type o None
         """
         if not self._is_l10n_do_fiscal_pos():
             return None
@@ -46,13 +42,11 @@ class PosOrder(models.Model):
         if not partner:
             partner = self.partner_id or config.l10n_do_default_partner_id
 
-        # Determinar el ncf_type según el tipo de contribuyente del partner
         if partner and partner.l10n_do_dgii_tax_payer_type == "taxpayer":
             target_ncf_type = "fiscal"
         else:
             target_ncf_type = "consumer"
 
-        # Obtener los tipos NCF permitidos para este diario/partner
         if partner and partner.l10n_do_dgii_tax_payer_type:
             ncf_types = journal._get_journal_ncf_types(
                 counterpart_partner=partner.commercial_partner_id,
@@ -60,16 +54,13 @@ class PosOrder(models.Model):
         else:
             ncf_types = journal._get_journal_ncf_types()
 
-        # Filtrar para incluir solo el tipo objetivo (y su versión e-CF)
         allowed_ncf_types = [
-            t for t in ncf_types
-            if t in (target_ncf_type, "e-%s" % target_ncf_type)
+            t for t in ncf_types if t in (target_ncf_type, "e-%s" % target_ncf_type)
         ]
 
         if not allowed_ncf_types:
             return None
 
-        # Buscar el document type correspondiente usando los prefijos del diario
         codes = journal._get_journal_codes()
         domain = [
             ("country_id.code", "=", "DO"),
@@ -81,53 +72,12 @@ class PosOrder(models.Model):
 
         return self.env["l10n_latam.document.type"].search(domain, limit=1)
 
-    def _generate_l10n_do_ncf(self):
-        """Genera NCF para órdenes POS sin factura.
-
-        Crea una factura temporal en borrador para generar el número fiscal,
-        extrae el NCF, y descarta la factura.
-        """
-        self.ensure_one()
-        if not self._is_l10n_do_fiscal_pos():
-            return
-
-        doc_type = self._get_l10n_do_document_type()
-        if not doc_type:
-            return
-
-        # Crear factura temporal para generar el NCF
-        invoice_vals = self._prepare_invoice_vals()
-        invoice = self.env['account.move'].create(invoice_vals)
-
-        try:
-            # Generar el número fiscal (NCF)
-            invoice_with_context = invoice.with_context(is_l10n_do_seq=True)
-            invoice_with_context._set_next_sequence()
-
-            # Guardar el NCF en la orden POS
-            if invoice.l10n_do_fiscal_number:
-                self.write({
-                    'l10n_do_ncf': invoice.l10n_do_fiscal_number,
-                    'l10n_do_ncf_type': doc_type.doc_code_prefix,
-                })
-        finally:
-            # Descartar la factura temporal
-            invoice.unlink()
-
-    def action_pos_order_paid(self):
-        res = super().action_pos_order_paid()
-        # Generar NCF para órdenes sin factura
-        if self._is_l10n_do_fiscal_pos() and not self.to_invoice:
-            self._generate_l10n_do_ncf()
-        return res
-
     def _prepare_invoice_vals(self):
+        """Inyecta el diario fiscal y tipo de documento en la factura del POS."""
         vals = super()._prepare_invoice_vals()
 
         if self._is_l10n_do_fiscal_pos():
-            config = self.config_id
-            journal = config.l10n_do_fiscal_journal_id
-
+            journal = self.config_id.l10n_do_fiscal_journal_id
             doc_type = self._get_l10n_do_document_type(self.partner_id)
             vals.update({
                 "journal_id": journal.id,
@@ -136,14 +86,26 @@ class PosOrder(models.Model):
 
         return vals
 
-    def _create_invoice(self, move_vals):
-        invoice = super()._create_invoice(move_vals)
+    def _generate_pos_order_invoice(self):
+        """Genera la factura del POS y captura el NCF generado por la secuencia.
 
-        if invoice and self._is_l10n_do_fiscal_pos():
-            invoice_with_context = invoice.with_context(is_l10n_do_seq=True)
-            invoice_with_context._set_next_sequence()
+        El flujo estándar de ``point_of_sale`` crea la factura en borrador y
+        luego invoca ``_post()``, que dispara el ``sequence_mixin`` y asigna el
+        NCF en ``name``. Una vez posteada la factura, se copia el NCF completo
+        (campo computado ``l10n_do_fiscal_number``) a la orden POS para que
+        quede disponible en el recibo y en reportes.
+        """
+        invoice = super()._generate_pos_order_invoice()
 
-            self.l10n_do_ncf = invoice.l10n_do_fiscal_number
-            self.l10n_do_ncf_type = invoice.l10n_latam_document_type_id.doc_code_prefix
+        do_orders = self.filtered(lambda o: o._is_l10n_do_fiscal_pos())
+        for order in do_orders:
+            move = order.account_move
+            if move and move.l10n_do_fiscal_number:
+                order.write({
+                    "l10n_do_ncf": move.l10n_do_fiscal_number,
+                    "l10n_do_ncf_type": (
+                        move.l10n_latam_document_type_id.doc_code_prefix
+                    ),
+                })
 
         return invoice

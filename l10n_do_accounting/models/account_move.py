@@ -475,18 +475,25 @@ class AccountMove(models.Model):
 
         return super(AccountMove, self).action_reverse()
 
-    @api.onchange("l10n_latam_document_type_id", "l10n_latam_document_number")
     def _inverse_l10n_latam_document_number(self):
         """Convierte el NCF capturado por el usuario al formato LATAM en `name`.
 
         El usuario ingresa el NCF completo (p. ej. ``"B0100000001"``). Se valida
         mediante ``_format_document_number`` y se guarda en ``name`` con el
         formato LATAM (``"B01 00000001"``) que espera el mixin de secuencias.
+
+        Sólo se actúa sobre facturas dominicanas en borrador que nunca han sido
+        posteadas, para evitar pisar el ``name`` generado por la secuencia al
+        momento de postear.
         """
-        do_moves = self.filtered(lambda m: m.country_code == "DO")
+        do_moves = self.filtered(
+            lambda m: m.country_code == "DO"
+            and m.state == "draft"
+            and not m.posted_before
+        )
         for rec in do_moves.filtered("l10n_latam_document_type_id"):
             if not rec.l10n_latam_document_number:
-                rec.name = "/"
+                rec.name = False
                 continue
 
             document_type_id = rec.l10n_latam_document_type_id
