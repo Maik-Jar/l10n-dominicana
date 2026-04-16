@@ -638,12 +638,17 @@ class AccountMoveTest(common.L10nDOTestsCommon):
 
         invoice_2 = self._create_l10n_do_invoice()
         invoice_2._post()
+        # l10n_do_fiscal_number ahora es computado desde `name`; se fuerza el
+        # conflicto escribiendo directamente sobre `name` en formato LATAM.
         with self.assertRaises(psycopg2.errors.UniqueViolation):
-            invoice_2.write({"l10n_do_fiscal_number": "B0100000001"})
+            invoice_2.write({"name": "B01 00000001"})
 
     def test_008_check_sequence(self):
         """
-        Check invoices get right internal & fiscal sequences
+        Check invoices get right fiscal sequences in LATAM format.
+        Con la integración LATAM, ``name`` almacena el número fiscal con el
+        separador LATAM (``"B01 00000001"``) y ``l10n_do_fiscal_number`` se
+        computa a partir de él eliminando el espacio (``"B0100000001"``).
         """
 
         sale_invoice_1_id = self._create_l10n_do_invoice(
@@ -652,16 +657,12 @@ class AccountMoveTest(common.L10nDOTestsCommon):
             }
         )
         sale_invoice_1_id._post()
-        self.assertEqual(
-            sale_invoice_1_id.name, "INV/%s/0001" % fields.Date.today().year
-        )
+        self.assertEqual(sale_invoice_1_id.name, "B01 00000001")
         self.assertEqual(sale_invoice_1_id.l10n_do_fiscal_number, "B0100000001")
 
         sale_invoice_2_id = self._create_l10n_do_invoice()
         sale_invoice_2_id._post()
-        self.assertEqual(
-            sale_invoice_2_id.name, "INV/%s/0002" % fields.Date.today().year
-        )
+        self.assertEqual(sale_invoice_2_id.name, "B01 00000002")
         self.assertEqual(sale_invoice_2_id.l10n_do_fiscal_number, "B0100000002")
 
         purchase_invoice_1_id = self._create_l10n_do_invoice(
@@ -673,9 +674,7 @@ class AccountMoveTest(common.L10nDOTestsCommon):
             invoice_type="in_invoice",
         )
         purchase_invoice_1_id._post()
-        self.assertEqual(
-            purchase_invoice_1_id.name, "BILL/%s/0001" % fields.Date.today().year
-        )
+        self.assertEqual(purchase_invoice_1_id.name, "B01 00000001")
         self.assertEqual(purchase_invoice_1_id.l10n_do_fiscal_number, "B0100000001")
 
         purchase_invoice_2_id = self._create_l10n_do_invoice(
@@ -688,34 +687,35 @@ class AccountMoveTest(common.L10nDOTestsCommon):
             invoice_type="in_invoice",
         )
         purchase_invoice_2_id._post()
-        self.assertEqual(
-            purchase_invoice_2_id.name, "BILL/%s/0002" % fields.Date.today().year
-        )
+        self.assertEqual(purchase_invoice_2_id.name, "B11 00000001")
         self.assertEqual(purchase_invoice_2_id.l10n_do_fiscal_number, "B1100000001")
 
     def test_009_invoice_sequence(self):
+        """La secuencia fiscal dominicana es continua (nunca se reinicia por año).
+        ``name`` refleja directamente el NCF en formato LATAM.
+        """
         invoice_1 = self._create_l10n_do_invoice(
             data={
                 "document_number": "B0100000001",
             }
         )
-        self.assertEqual(invoice_1.name, "INV/%s/0001" % invoice_1.date.year)
+        self.assertEqual(invoice_1.name, "B01 00000001")
         invoice_1._post()
         self.assertEqual(invoice_1.l10n_do_fiscal_number, "B0100000001")
 
         invoice_2 = self._create_l10n_do_invoice()
         invoice_2._post()
-        self.assertEqual(invoice_2.name, "INV/%s/0002" % invoice_2.date.year)
+        self.assertEqual(invoice_2.name, "B01 00000002")
         self.assertEqual(invoice_2.l10n_do_fiscal_number, "B0100000002")
 
-        # Unit test to verify if the invoice number or document number is repeated
+        # La secuencia NCF no se reinicia al cambiar de año fiscal
         invoice_3 = self._create_l10n_do_invoice(
             data={
                 "invoice_date": "2023-05-08",
             }
         )
         invoice_3._post()
-        self.assertEqual(invoice_3.name, "INV/%s/0001" % invoice_3.date.year)
+        self.assertEqual(invoice_3.name, "B01 00000003")
         self.assertNotEqual(invoice_3.l10n_do_fiscal_number, "B0100000001")
         self.assertEqual(invoice_3.l10n_do_fiscal_number, "B0100000003")
 

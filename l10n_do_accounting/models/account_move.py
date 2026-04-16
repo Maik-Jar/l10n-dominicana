@@ -1,21 +1,15 @@
-import re
 from werkzeug import urls
 
 from odoo import models, fields, api, _
 from odoo.osv import expression
 from odoo.exceptions import ValidationError, UserError, AccessError
-from odoo.tools.sql import column_exists, create_column, drop_index, index_exists
 
 
 class AccountMove(models.Model):
     _inherit = "account.move"
-    _rec_names_search = ["l10n_do_fiscal_number"]
-
-    _l10n_do_sequence_field = "l10n_do_fiscal_number"
-    _l10n_do_sequence_fixed_regex = r"^(?P<prefix1>.*?)(?P<seq>\d{0,8})$"
 
     def _get_l10n_do_cancellation_type(self):
-        """Return the list of cancellation types required by DGII."""
+        """Retorna los tipos de anulación requeridos por la DGII."""
         return [
             ("01", _("01 - Pre-printed Invoice Impairment")),
             ("02", _("02 - Printing Errors (Pre-printed Invoice)")),
@@ -30,7 +24,7 @@ class AccountMove(models.Model):
         ]
 
     def _get_l10n_do_ecf_modification_code(self):
-        """Return the list of e-CF modification codes required by DGII."""
+        """Retorna los códigos de modificación de e-CF requeridos por la DGII."""
         return [
             ("1", _("01 - Total Cancellation")),
             ("2", _("02 - Text Correction")),
@@ -40,7 +34,7 @@ class AccountMove(models.Model):
         ]
 
     def _get_l10n_do_income_type(self):
-        """Return the list of income types required by DGII."""
+        """Retorna los tipos de ingreso requeridos por la DGII."""
         return [
             ("01", _("01 - Operational Incomes")),
             ("02", _("02 - Financial Incomes")),
@@ -95,27 +89,28 @@ class AccountMove(models.Model):
         string="Company in contingency",
         compute="_compute_company_in_contingency",
     )
-    l10n_do_sequence_prefix = fields.Char(compute="_compute_split_sequence", store=True)
-    l10n_do_sequence_number = fields.Integer(
-        compute="_compute_split_sequence", store=True
-    )
     l10n_do_enable_first_sequence = fields.Boolean(
         string="Enable first fiscal sequence",
         compute="_compute_l10n_do_enable_first_sequence",
         help="Technical field that compute if internal generated fiscal sequence "
         "is enabled to be set manually.",
     )
+    # Campo computado que se deriva de `name` (formato LATAM "B01 00000001"),
+    # removiendo el espacio separador para obtener el NCF completo ("B0100000001").
     l10n_do_fiscal_number = fields.Char(
         "Fiscal Number",
+        compute="_compute_l10n_do_fiscal_number",
+        store=True,
         index="trigram",
         tracking=True,
         copy=False,
-        help="Stored field equivalent of l10n_latam_document number",
+        help="NCF completo derivado del campo name sin el espacio separador.",
     )
     l10n_do_ecf_edi_file = fields.Binary("ECF XML File", copy=False, readonly=True)
     l10n_do_ecf_edi_file_name = fields.Char(
         "ECF XML File Name", copy=False, readonly=True
     )
+    # Se fuerza almacenamiento para poder usarlo en los índices únicos SQL.
     l10n_latam_manual_document_number = fields.Boolean(store=True)
     l10n_do_show_expiration_date_msg = fields.Boolean(
         "Show Expiration Date Message",
@@ -124,75 +119,56 @@ class AccountMove(models.Model):
         "manually because a new expiration date was set on journal",
     )
 
-    _sql_constraints = [
-        (
-            "unique_l10n_do_fiscal_number_sales",
-            "",
-            "Another document with the same fiscal number already exists.",
-        ),
-        (
-            "unique_l10n_do_fiscal_number_purchase_manual",
-            "",
-            "Another document for the same partner with the same fiscal number already exists.",
-        ),
-        (
-            "unique_l10n_do_fiscal_number_purchase_internal",
-            "",
-            "Another document for the same partner with the same fiscal number already exists.",
-        ),
-    ]
+    # Índices únicos a nivel de base de datos (Odoo 19.0 usa models.UniqueIndex).
+    _unique_l10n_do_fiscal_number_sales = models.UniqueIndex(
+        "(l10n_do_fiscal_number, company_id) "
+        "WHERE l10n_latam_document_type_id IS NOT NULL "
+        "AND move_type NOT IN ('in_invoice', 'in_refund') "
+        "AND l10n_do_fiscal_number IS NOT NULL "
+        "AND l10n_do_fiscal_number <> ''"
+    )
+    _unique_l10n_do_fiscal_number_purchase_manual = models.UniqueIndex(
+        "(l10n_do_fiscal_number, commercial_partner_id, company_id) "
+        "WHERE l10n_latam_document_type_id IS NOT NULL "
+        "AND move_type IN ('in_invoice', 'in_refund') "
+        "AND l10n_latam_manual_document_number IS TRUE "
+        "AND l10n_do_fiscal_number IS NOT NULL "
+        "AND l10n_do_fiscal_number <> ''"
+    )
+    _unique_l10n_do_fiscal_number_purchase_internal = models.UniqueIndex(
+        "(l10n_do_fiscal_number, company_id) "
+        "WHERE l10n_latam_document_type_id IS NOT NULL "
+        "AND move_type IN ('in_invoice', 'in_refund', 'in_receipt') "
+        "AND l10n_latam_manual_document_number IS FALSE "
+        "AND l10n_do_fiscal_number IS NOT NULL "
+        "AND l10n_do_fiscal_number <> ''"
+    )
 
-    def _auto_init(self):
-        if not index_exists(
-            self.env.cr, "account_move_unique_l10n_do_fiscal_number_sales"
-        ):
-            drop_index(
-                self.env.cr,
-                "account_move_unique_l10n_do_fiscal_number_purchase_manual",
-                self._table,
-            )
-            drop_index(
-                self.env.cr,
-                "account_move_unique_l10n_do_fiscal_number_purchase_internal",
-                self._table,
-            )
+    @api.depends(
+        "name",
+        "l10n_latam_document_type_id",
+        "l10n_latam_use_documents",
+        "country_code",
+    )
+    def _compute_l10n_do_fiscal_number(self):
+        """Deriva el NCF completo a partir del campo `name` (formato LATAM).
 
-            if not column_exists(self.env.cr, "account_move", "l10n_do_fiscal_number"):
-                create_column(
-                    self.env.cr, "account_move", "l10n_do_fiscal_number", "varchar"
-                )
-            if not column_exists(
-                self.env.cr, "account_move", "l10n_latam_manual_document_number"
+        El mecanismo estándar de secuencias de Odoo 19.0 asigna `name` con el
+        formato `"PREFIX NUMERO"` (p. ej. `"B01 00000001"`). Este método elimina
+        el espacio separador para producir el NCF almacenado (`"B0100000001"`).
+        """
+        for move in self:
+            if (
+                move.country_code == "DO"
+                and move.l10n_latam_use_documents
+                and move.l10n_latam_document_type_id
+                and move.name
+                and move.name != "/"
+                and " " in move.name
             ):
-                create_column(
-                    self.env.cr,
-                    "account_move",
-                    "l10n_latam_manual_document_number",
-                    "varchar",
-                )
-
-            self.env.cr.execute(
-                """
-                CREATE UNIQUE INDEX account_move_unique_l10n_do_fiscal_number_sales
-                ON account_move(l10n_do_fiscal_number, company_id)
-                WHERE (l10n_latam_document_type_id IS NOT NULL
-                AND move_type NOT IN ('in_invoice', 'in_refund'))
-                AND l10n_do_fiscal_number <> '';
-                
-                CREATE UNIQUE INDEX account_move_unique_l10n_do_fiscal_number_purchase_manual
-                ON account_move(l10n_do_fiscal_number, commercial_partner_id, company_id)
-                WHERE (l10n_latam_document_type_id IS NOT NULL AND move_type IN ('in_invoice', 'in_refund')
-                AND l10n_latam_manual_document_number = 't')
-                AND l10n_do_fiscal_number <> '';
-                
-                CREATE UNIQUE INDEX account_move_unique_l10n_do_fiscal_number_purchase_internal
-                ON account_move(l10n_do_fiscal_number, company_id)
-                WHERE (l10n_latam_document_type_id IS NOT NULL AND move_type IN ('in_invoice', 'in_refund', 'in_receipt')
-                AND l10n_latam_manual_document_number = 'f')
-                AND l10n_do_fiscal_number <> '';
-            """
-            )
-        return super()._auto_init()
+                move.l10n_do_fiscal_number = move.name.replace(" ", "", 1)
+            else:
+                move.l10n_do_fiscal_number = False
 
     @api.model
     def _name_search(self, name, domain=None, operator="ilike", limit=None, order=None):
@@ -258,8 +234,9 @@ class AccountMove(models.Model):
     )
     def _compute_l10n_do_enable_first_sequence(self):
         """
-        Enable first fiscal sequence manual input on internal generated documents
-        if no invoice of same document type was posted before
+        Habilita la captura manual del primer número fiscal para comprobantes
+        internos cuando no existe ninguna factura previamente publicada del
+        mismo tipo de documento.
         """
         l10n_do_internal_invoices = self.filtered(
             lambda inv: inv.l10n_latam_use_documents
@@ -291,8 +268,8 @@ class AccountMove(models.Model):
 
     def _get_l10n_do_amounts(self):
         """
-        Method used to prepare dominican fiscal invoices amounts data. Widely used
-        on reports and electronic invoicing.
+        Prepara los montos fiscales dominicanos usados en reportes y
+        facturación electrónica.
         """
         self.ensure_one()
 
@@ -323,10 +300,10 @@ class AccountMove(models.Model):
             limit=1,
         ).filtered(lambda i: not i.l10n_latam_manual_document_number)
 
-        # first set all invoices l10n_do_company_in_contingency = False
+        # Primero se reinicia el flag en todos los registros
         self.write({"l10n_do_company_in_contingency": False})
 
-        # then get draft invoices and do the thing
+        # Luego se activa sólo en facturas en borrador cuando aplica
         for invoice in self.filtered(lambda inv: inv.state == "draft"):
             invoice.l10n_do_company_in_contingency = bool(
                 ecf_invoices and not invoice.company_id.l10n_do_ecf_issuer
@@ -425,15 +402,25 @@ class AccountMove(models.Model):
                     )
                 )
 
-    @api.depends("l10n_do_fiscal_number")
+    @api.depends("name", "l10n_latam_document_type_id")
     def _compute_l10n_latam_document_number(self):
+        """Para facturas dominicanas se expone el NCF completo (con prefijo y sin espacio)
+        en `l10n_latam_document_number`, preservando la experiencia de usuario histórica
+        donde el campo visible en la vista muestra el número fiscal tal cual lo captura el
+        usuario o lo genera la secuencia.
+        """
         l10n_do_recs = self.filtered(
             lambda x: x.country_code == "DO" and x.l10n_latam_use_documents
         )
         for rec in l10n_do_recs:
-            rec.l10n_latam_document_number = rec.l10n_do_fiscal_number
+            if rec.name and rec.name != "/" and " " in rec.name:
+                rec.l10n_latam_document_number = rec.name.replace(" ", "", 1)
+            else:
+                rec.l10n_latam_document_number = False
 
-        super(AccountMove, self - l10n_do_recs)._compute_l10n_latam_document_number()
+        super(
+            AccountMove, self - l10n_do_recs
+        )._compute_l10n_latam_document_number()
 
     def button_cancel(self):
         fiscal_invoice = self.filtered(
@@ -490,23 +477,37 @@ class AccountMove(models.Model):
 
     @api.onchange("l10n_latam_document_type_id", "l10n_latam_document_number")
     def _inverse_l10n_latam_document_number(self):
-        for rec in self.filtered("l10n_latam_document_type_id"):
-            if not rec.l10n_latam_document_number:
-                rec.l10n_do_fiscal_number = ""
-            else:
-                document_type_id = rec.l10n_latam_document_type_id
-                if document_type_id.l10n_do_ncf_type:
-                    document_number = document_type_id._format_document_number(
-                        rec.l10n_latam_document_number
-                    )
-                else:
-                    document_number = rec.l10n_latam_document_number
+        """Convierte el NCF capturado por el usuario al formato LATAM en `name`.
 
-                if rec.l10n_latam_document_number != document_number:
-                    rec.l10n_latam_document_number = document_number
-                rec.l10n_do_fiscal_number = document_number
+        El usuario ingresa el NCF completo (p. ej. ``"B0100000001"``). Se valida
+        mediante ``_format_document_number`` y se guarda en ``name`` con el
+        formato LATAM (``"B01 00000001"``) que espera el mixin de secuencias.
+        """
+        do_moves = self.filtered(lambda m: m.country_code == "DO")
+        for rec in do_moves.filtered("l10n_latam_document_type_id"):
+            if not rec.l10n_latam_document_number:
+                rec.name = "/"
+                continue
+
+            document_type_id = rec.l10n_latam_document_type_id
+            if document_type_id.l10n_do_ncf_type:
+                document_number = document_type_id._format_document_number(
+                    rec.l10n_latam_document_number
+                )
+            else:
+                document_number = rec.l10n_latam_document_number
+
+            if rec.l10n_latam_document_number != document_number:
+                rec.l10n_latam_document_number = document_number
+
+            prefix = document_type_id.doc_code_prefix or ""
+            if prefix and document_number.startswith(prefix):
+                rec.name = "%s %s" % (prefix, document_number[len(prefix):])
+            else:
+                rec.name = document_number
+
         super(
-            AccountMove, self.filtered(lambda m: m.country_code != "DO")
+            AccountMove, self - do_moves
         )._inverse_l10n_latam_document_number()
 
     def _get_l10n_latam_documents_domain(self):
@@ -582,36 +583,6 @@ class AccountMove(models.Model):
             )
 
         return super(AccountMove, self)._onchange_partner_id()
-
-    def _reverse_move_vals(self, default_values, cancel=True):
-        ctx = self.env.context
-        amount = ctx.get("amount")
-        percentage = ctx.get("percentage")
-        refund_type = ctx.get("refund_type")
-        reason = ctx.get("reason")
-        l10n_do_ecf_modification_code = ctx.get("l10n_do_ecf_modification_code")
-
-        res = super(AccountMove, self)._reverse_move_vals(
-            default_values=default_values, cancel=cancel
-        )
-        if self.country_code != "DO":
-            return res
-
-        if self.country_code == "DO":
-            res["l10n_do_origin_ncf"] = self.l10n_do_fiscal_number or self.ref
-            res["l10n_do_ecf_modification_code"] = l10n_do_ecf_modification_code
-
-        if refund_type in ("percentage", "fixed_amount"):
-            price_unit = (
-                amount
-                if refund_type == "fixed_amount"
-                else self.amount_untaxed * (percentage / 100)
-            )
-            res["line_ids"] = False
-            res["invoice_line_ids"] = [
-                (0, 0, {"name": reason or _("Refund"), "price_unit": price_unit})
-            ]
-        return res
 
     @api.depends("l10n_latam_document_type_id", "journal_id")
     def _compute_l10n_latam_manual_document_number(self):
@@ -691,200 +662,30 @@ class AccountMove(models.Model):
 
         return res
 
-    def _l10n_do_get_formatted_sequence(self):
-        self.ensure_one()
-        if not self.env.context.get("is_l10n_do_seq", False):
-            starting_sequence = "%s/%04d/0000" % (
-                self.journal_id.code,
-                self.date.year,
-            )
-            if self.journal_id.refund_sequence and self.move_type in (
-                "out_refund",
-                "in_refund",
-            ):
-                starting_sequence = "R" + starting_sequence
-            return starting_sequence
-
-        document_type_id = self.l10n_latam_document_type_id
-        return "%s%s" % (
-            document_type_id.doc_code_prefix,
-            "".zfill(
-                10 if str(document_type_id.l10n_do_ncf_type).startswith("e-") else 8
-            ),
-        )
-
     def _get_starting_sequence(self):
-        if self.journal_id.l10n_latam_use_documents and self.country_code == "DO":
-            return self._l10n_do_get_formatted_sequence()
+        """Define la secuencia inicial para comprobantes fiscales dominicanos.
 
-        return super()._get_starting_sequence()
-
-    def _get_last_sequence_domain(self, relaxed=False):
-        where_string, param = super(AccountMove, self)._get_last_sequence_domain(
-            relaxed
-        )
-
-        if self.l10n_latam_use_documents and self.country_code == "DO":
-            where_string = where_string.replace(
-                "AND sequence_prefix !~ %(anti_regex)s ", ""
-            )
-        if self.env.context.get("is_l10n_do_seq", False):
-            where_string = where_string.replace("journal_id = %(journal_id)s AND", "")
-            where_string += (
-                " AND l10n_latam_document_type_id = %(l10n_latam_document_type_id)s AND"
-                " company_id = %(company_id)s AND l10n_do_sequence_prefix != ''"
-                " AND l10n_do_sequence_prefix IS NOT NULL"
-            )
-            if (
-                not self.l10n_latam_manual_document_number
-                and self.move_type != "in_refund"
-            ):
-                where_string += " AND move_type = %(move_type)s"
-                param["move_type"] = self.move_type
-            else:
-                where_string += " AND l10n_latam_manual_document_number = 'f'"
-
-            param["company_id"] = self.company_id.id or False
-            param["l10n_latam_document_type_id"] = (
-                self.l10n_latam_document_type_id.id or 0
-            )
-        return where_string, param
-
-    @api.depends(lambda self: [self._l10n_do_sequence_field])
-    def _compute_split_sequence(self):
-        super(AccountMove, self)._compute_split_sequence()
-        for record in self:
-            sequence = record[record._l10n_do_sequence_field] or ""
-            regex = re.sub(
-                r"\?P<\w+>",
-                "?:",
-                record._l10n_do_sequence_fixed_regex.replace(r"?P<seq>", ""),
-            )
-            matching = re.match(regex, sequence)
-            record.l10n_do_sequence_prefix = sequence[:3]
-            record.l10n_do_sequence_number = int(matching.group(1) or 0)
-
-    def _get_last_sequence(self, relaxed=False, with_prefix=None):
-        if not self.env.context.get("is_l10n_do_seq", False):
-            return super(AccountMove, self)._get_last_sequence(
-                relaxed=relaxed, with_prefix=with_prefix
-            )
-
-        self.ensure_one()
+        El mecanismo de ``sequence_mixin`` parte de un valor de referencia con el
+        formato `"PREFIX 00000000"` para los NCF tradicionales (8 dígitos) o
+        `"PREFIX 0000000000"` para los e-CF (10 dígitos).
+        """
         if (
-            self._l10n_do_sequence_field not in self._fields
-            or not self._fields[self._l10n_do_sequence_field].store
-        ):
-            raise ValidationError(
-                _("%s is not a stored field", self._l10n_do_sequence_field)
-            )
-        where_string, param = self._get_last_sequence_domain(relaxed)
-        if self.id or self.id.origin:
-            where_string += " AND id != %(id)s "
-            param["id"] = self.id or self.id.origin
-
-        query = """
-            UPDATE {table} SET write_date = write_date WHERE id = (
-                SELECT id FROM {table}
-                {where_string}
-                AND l10n_do_sequence_prefix = (
-                SELECT l10n_do_sequence_prefix
-                FROM {table} {where_string}
-                ORDER BY id DESC LIMIT 1)
-                ORDER BY l10n_do_sequence_number DESC
-                LIMIT 1
-            )
-            RETURNING {field};
-        """.format(
-            table=self._table,
-            where_string=where_string,
-            field=self._l10n_do_sequence_field,
-        )
-
-        self.flush_model(
-            [
-                self._l10n_do_sequence_field,
-                "l10n_do_sequence_number",
-                "l10n_do_sequence_prefix",
-            ]
-        )
-        self.env.cr.execute(query, param)
-        return (self.env.cr.fetchone() or [None])[0]
-
-    def _get_sequence_format_param(self, previous):
-        # Check if this is a Dominican invoice with fiscal number
-        is_do_invoice = (
-            self.country_code == "DO"
-            and self.l10n_latam_use_documents
-            and previous
-        )
-
-        if not is_do_invoice:
-            return super(AccountMove, self)._get_sequence_format_param(previous)
-
-        regex = self._l10n_do_sequence_fixed_regex
-
-        format_values = re.match(regex, previous).groupdict()
-        format_values["seq_length"] = len(format_values["seq"])
-        format_values["seq"] = int(format_values.get("seq") or 0)
-
-        # Ensure all required keys exist for Odoo 19.0 compatibility
-        # The _sequence_matches_date method expects these fields
-        format_values["year_length"] = len(format_values.get("year") or "")
-        format_values["year_end_length"] = len(format_values.get("year_end") or "")
-        for field in ("year", "month", "year_end"):
-            format_values[field] = int(format_values.get(field) or 0)
-
-        placeholders = re.findall(r"(prefix\d|seq\d?)", regex)
-        format = "".join(
-            "{seq:0{seq_length}d}" if s == "seq" else "{%s}" % s for s in placeholders
-        )
-        return format, format_values
-
-    def _set_next_sequence(self):
-        self.ensure_one()
-
-        # Check if this is a Dominican invoice that should use fiscal sequence
-        is_do_invoice = (
-            self.country_code == "DO"
-            and self.l10n_latam_use_documents
+            self.journal_id.l10n_latam_use_documents
+            and self.country_code == "DO"
             and self.l10n_latam_document_type_id
-        )
-
-        if not is_do_invoice:
-            return super(AccountMove, self)._set_next_sequence()
-
-        last_sequence = self._get_last_sequence()
-        new = not last_sequence
-        if new:
-            last_sequence = (
-                self._get_last_sequence(relaxed=True) or self._get_starting_sequence()
-            )
-
-        format, format_values = self._get_sequence_format_param(last_sequence)
-        if new:
-            format_values["seq"] = 0
-        format_values["seq"] = format_values["seq"] + 1
-
-        if (
-            self.env.context.get("prefetch_seq")
-            or self.state != "draft"
-            and not self[self._l10n_do_sequence_field]
         ):
-            self[self._l10n_do_sequence_field] = (
-                self.l10n_latam_document_type_id._format_document_number(
-                    format.format(**format_values)
-                )
+            doc_type = self.l10n_latam_document_type_id
+            seq_len = (
+                10 if str(doc_type.l10n_do_ncf_type or "").startswith("e-") else 8
             )
-        self._compute_split_sequence()
+            return "%s %s" % (doc_type.doc_code_prefix, "0" * seq_len)
+        return super()._get_starting_sequence()
 
     def _get_name_invoice_report(self):
         self.ensure_one()
         if self.l10n_latam_use_documents and self.country_code == "DO":
             return "l10n_do_accounting.report_invoice_document_inherited"
         return super()._get_name_invoice_report()
-
-    # TODO: handle l10n_latam_invoice_document _compute_name() inheritance shit
 
     def unlink(self):
         if self.filtered(
@@ -898,18 +699,9 @@ class AccountMove(models.Model):
             )
         return super(AccountMove, self).unlink()
 
-    # Extension of the _deduce_sequence_number_reset function to compute the `name` field according to the invoice
-    # date and prevent the `l10n_latam_document_number` field from being reset
     @api.model
     def _deduce_sequence_number_reset(self, name):
-        if (
-            self.l10n_latam_use_documents
-            and self.company_id.country_id.code == "DO"
-            and self.posted_before
-            and not self.env.context.get("is_l10n_do_seq", False)
-        ):
-            return "year"
-        elif self.env.context.get("is_l10n_do_seq", False):
+        """Las secuencias fiscales dominicanas son continuas, nunca se reinician."""
+        if self.l10n_latam_use_documents and self.company_id.country_id.code == "DO":
             return "never"
-        else:
-            return super(AccountMove, self)._deduce_sequence_number_reset(name)
+        return super()._deduce_sequence_number_reset(name)

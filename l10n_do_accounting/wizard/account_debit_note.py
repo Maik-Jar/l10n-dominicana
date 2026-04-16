@@ -160,19 +160,18 @@ class AccountDebitNote(models.TransientModel):
     def _prepare_default_values(self, move):
         res = super(AccountDebitNote, self)._prepare_default_values(move)
 
-        # Include additional info when l10n_do debit note
+        # Información adicional para notas de débito dominicanas
         if self.l10n_latam_country_code == "DO" and move.l10n_latam_use_documents:
             res.update(
                 dict(
                     l10n_latam_document_type_id=self.l10n_latam_document_type_id.id,
                     l10n_do_ecf_modification_code=self.l10n_do_ecf_modification_code,
                     l10n_latam_document_number=self.l10n_latam_document_number,
-                    l10n_do_origin_ncf=move.l10n_latam_document_number,
+                    l10n_do_origin_ncf=move.l10n_do_fiscal_number,
                     l10n_do_expense_type=move.l10n_do_expense_type,
                     l10n_do_income_type=move.l10n_do_income_type,
                     invoice_origin=move.name,
                     line_ids=[(5, 0, 0)],
-                    l10n_do_fiscal_number=move.name,
                 )
             )
 
